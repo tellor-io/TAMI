@@ -3,9 +3,9 @@ import type {
   Transaction,
   TransactionMap,
 } from '../types';
-import { filterValidTransactions } from '../utils/filterValidTransactions';
-import { sortTransactions } from '../utils/sortTransactions';
-
+import { filterValidTransactions } from '../utils/filterValidTransactions.js';
+import { sortTransactions } from '../utils/sortTransactions.js';
+import axios, { AxiosRequestConfig } from 'axios';
 /**
  * Given a list of transactions, this creates a list that contains the index value at the
  * time of each transaction, and includes the transaction as well.
@@ -20,6 +20,8 @@ export function createIndexValueHistory(
   let lastDivisor = 1;
 
   const result = [];
+
+  console.log("transaction history after filtering: ", transactionHistory.length)
 
   for (let i = 0; i < transactionHistory.length; i += 1) {
     const transaction = transactionHistory[i];
@@ -37,6 +39,8 @@ export function createIndexValueHistory(
       0
     );
 
+    // console.log("allLastSoldValue: ", allLastSoldValue)
+    // console.log("tx price", transaction.price)
     const indexValue = allLastSoldValue / (itemCount * lastDivisor);
 
     if (i === 0) {
@@ -108,14 +112,18 @@ export function getIndexRatios(indexValueHistory: IndexValueHistoryItem[]) {
  */
 export function tami(transactionHistory: Transaction[]): number | null {
   const sortedTransactions = sortTransactions(transactionHistory);
+  // console.log("sortedTransactions: ", sortedTransactions)
   const validTransactions = filterValidTransactions(sortedTransactions);
+  // console.log("validTransactions: ", validTransactions)
   const indexValueHistory = createIndexValueHistory(validTransactions);
+  // console.log("index value history:", indexValueHistory)
 
   if (indexValueHistory.length === 0) {
     return null;
   }
 
   const indexValue = getIndexValue(indexValueHistory);
+  console.log("index value: ", indexValue)
   const indexRatios = getIndexRatios(indexValueHistory);
   const timeAdjustedValues = indexRatios.map((item) => {
     return indexValue * item.indexRatio;
@@ -126,3 +134,50 @@ export function tami(transactionHistory: Transaction[]): number | null {
   );
   return timeAdjustedMarketIndex;
 }
+
+
+// continuation_token = ""
+let continuation_token: string = ""
+let tx_list: Transaction[] = []
+while (true) {
+  let url: string = "https://api.reservoir.tools/sales/v4?contract=0x5180db8F5c931aaE63c74266b211F580155ecac8"
+  // let one_year_ago = Math.floor(Date.now() / 1000) - 60*60*24*365
+  // url += "&startTimestamp=" + one_year_ago
+  url += "&startTimestamp=0"
+
+  if (continuation_token) {
+    url += "&continuation=" + continuation_token
+  }
+  url += "&limit=1000"
+  console.log("url: ", url)
+  let config: AxiosRequestConfig = {"headers": {"accept": "*/*", "x-api-key": "demo-api-key"}}
+  let response = await axios.get(url, config)
+
+  let sales = response.data["sales"]
+  console.log("sales length: ", sales.length)
+  continuation_token = response.data["continuation"]
+
+  let price, item_id, timestamp
+  for (let i = 0; i < sales.length; i++) {
+    price = sales[i]["price"]["amount"]["usd"]
+    item_id = sales[i]["token"]["tokenId"]
+    timestamp = new Date(sales[i]["timestamp"] * 1000)
+
+    let tx: Transaction = {
+      price: price,
+      itemId: item_id,
+      timestamp: timestamp
+    }
+
+    tx_list.push(tx)
+  }
+
+  if (sales.length < 1000) {
+    break
+  }
+
+}
+
+console.log("number of transactions requested:", tx_list.length)
+
+console.log(tami(tx_list))

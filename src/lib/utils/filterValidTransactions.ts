@@ -26,6 +26,9 @@ export function filterValidTransactions(
     }
   > = {};
 
+
+  console.log("transaction history before filtering: ", transactionHistory.length)
+
   for (const transaction of transactionHistory) {
     const { itemId, timestamp } = transaction;
 
@@ -65,6 +68,8 @@ export function filterValidTransactions(
       currentMapItem.isValid = true;
     }
   }
+
+  console.log("inclusion map: ", inclusionMap)
 
   return transactionHistory.filter((transaction) => {
     return inclusionMap[transaction.itemId].isValid;
